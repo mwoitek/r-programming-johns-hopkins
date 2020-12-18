@@ -1,0 +1,215 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.7.1
+  kernelspec:
+    display_name: R
+    language: R
+    name: ir
+---
+
+
+# Quiz: Reading and Summarizing Data
+
+
+## Imports
+
+
+```{r}
+suppressPackageStartupMessages(library(R.utils))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(readr))
+suppressPackageStartupMessages(library(readxl))
+```
+
+
+## First Dataset
+
+
+```{r}
+# Load the dataset:
+part_matter <- suppressMessages(read_csv("daily_SPEC_2014.csv.bz2"))
+```
+
+
+```{r}
+# Print the first 20 rows:
+head(part_matter, 20L)
+```
+
+
+```{r}
+# Print the column names:
+colnames(part_matter)
+```
+
+
+## Question 1
+
+What is the average "Arithmetic Mean" for "Bromine PM2.5 LC" in the state of Wisconsin?
+
+
+```{r}
+# Helper function:
+compute_avg_lvl <- function(constituent, state) {
+    amean <- part_matter["Arithmetic Mean"]
+    fltr_pname <- part_matter["Parameter Name"] == constituent
+    fltr_state <- part_matter["State Name"] == state
+    avg_lvl <- mean(amean[fltr_pname & fltr_state], na.rm = TRUE)
+    return(avg_lvl)
+}
+```
+
+
+```{r}
+# Compute and print the desired average:
+avg_lvl <- compute_avg_lvl("Bromine PM2.5 LC", "Wisconsin")
+printf("Average = %.6f\n", avg_lvl)
+```
+
+
+## Question 2
+
+Which constituent "Parameter Name" has the highest average level?
+
+
+```{r}
+# Use the column "Parameter Name" to group the data:
+by_pname <- group_by_at(part_matter, vars("Parameter Name"))
+
+# Compute the average level for each group:
+avg_lvl <- summarise_at(by_pname, vars("Arithmetic Mean"), mean, na.rm = TRUE)
+
+# Highest average level:
+pname <- pull(avg_lvl, 1)
+amean <- pull(avg_lvl, 2)
+fltr <- grepl("PM2.5", pname)
+high_avg_lvl <- max(amean[fltr])
+
+# Corresponding constituent:
+fltr <- amean == high_avg_lvl
+const <- pname[fltr]
+printf("Constituent with the highest average level = %s\n", const)
+```
+
+
+## Question 3
+
+Which monitoring site has the highest average level of "Sulfate PM2.5 LC"
+across all time?
+
+
+```{r}
+# Use the columns "State Code", "County Code" and "Site Num" to group the data:
+by_msite <- group_by_at(
+    part_matter, vars("State Code", "County Code", "Site Num")
+)
+
+# Extract the data corresponding to "Sulfate PM2.5 LC":
+by_msite_sulf <- filter_at(
+    by_msite, vars("Parameter Name"), ~ .x == "Sulfate PM2.5 LC"
+)
+
+# Compute the average level for each group:
+avg_lvl <- summarise_at(
+    by_msite_sulf, vars("Arithmetic Mean"), mean, na.rm = TRUE
+)
+
+printf("Monitoring site with the highest average level:\n")
+tmp <- filter_at(
+    avg_lvl, vars("Arithmetic Mean"), ~ .x == max(avg_lvl["Arithmetic Mean"])
+)
+printf("State Code  - %s\n", pull(tmp, 1))
+printf("County Code - %s\n", pull(tmp, 2))
+printf("Site Num    - %s\n", pull(tmp, 3))
+```
+
+
+## Question 4
+
+What is the absolute difference in the average levels of "EC PM2.5 LC TOR"
+between the states California and Arizona, across all time and all monitoring
+sites?
+
+
+```{r}
+# Compute the average level for Arizona:
+avg_lvl_az <- compute_avg_lvl("EC PM2.5 LC TOR", "Arizona")
+
+# Compute the average level for California:
+avg_lvl_ca <- compute_avg_lvl("EC PM2.5 LC TOR", "California")
+
+# Compute the absolute difference:
+abs_diff <- abs(avg_lvl_az - avg_lvl_ca)
+printf("Absolute difference = %.6f\n", abs_diff)
+```
+
+
+## Question 5
+
+What is the median level of "OC PM2.5 LC TOR" in the western United States,
+across all time? Define western as any monitoring location that has a Longitude
+LESS THAN -100.
+
+
+```{r}
+# Compute the median level:
+amean <- part_matter["Arithmetic Mean"]
+fltr_long <- part_matter["Longitude"] < -100
+fltr_pname <- part_matter["Parameter Name"] == "OC PM2.5 LC TOR"
+median_lvl <- median(amean[fltr_long & fltr_pname], na.rm = TRUE)
+printf("Median level = %.4f\n", median_lvl)
+```
+
+
+## Second Dataset
+
+
+```{r}
+# Load the dataset:
+sites <- suppressWarnings(read_excel("aqs_sites.xlsx"))
+```
+
+
+```{r}
+# Print the first 20 rows:
+head(sites, 20L)
+```
+
+
+```{r}
+# Print the column names:
+colnames(sites)
+```
+
+
+## Question 6
+
+How many monitoring sites are labelled as both RESIDENTIAL for "Land Use" and
+SUBURBAN for "Location Setting"?
+
+
+```{r}
+# Compute the number of monitoring sites:
+fltr_loc <- sites["Location Setting"] == "SUBURBAN"
+fltr_luse <- sites["Land Use"] == "RESIDENTIAL"
+sites_count <- sum(fltr_loc & fltr_luse, na.rm = TRUE)
+printf("Number of monitoring sites = %d\n", sites_count)
+```
+
+
+## Question 7
+
+What is the median level of "EC PM2.5 LC TOR" amongst monitoring sites that are
+labelled as both "RESIDENTIAL" and "SUBURBAN" in the eastern US, where eastern
+is defined as longitude greater than or equal to -100?
+
+
+```{r}
+# x:
+```
