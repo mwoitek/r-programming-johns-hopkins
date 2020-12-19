@@ -34,18 +34,9 @@ suppressPackageStartupMessages(library(readxl))
 ```{r}
 # Load the dataset:
 part_matter <- suppressMessages(read_csv("daily_SPEC_2014.csv.bz2"))
-```
 
-
-```{r}
 # Print the first 20 rows:
 head(part_matter, 20L)
-```
-
-
-```{r}
-# Print the column names:
-colnames(part_matter)
 ```
 
 
@@ -55,20 +46,11 @@ What is the average "Arithmetic Mean" for "Bromine PM2.5 LC" in the state of Wis
 
 
 ```{r}
-# Helper function:
-compute_avg_lvl <- function(constituent, state) {
-    amean <- part_matter["Arithmetic Mean"]
-    fltr_pname <- part_matter["Parameter Name"] == constituent
-    fltr_state <- part_matter["State Name"] == state
-    avg_lvl <- mean(amean[fltr_pname & fltr_state], na.rm = TRUE)
-    return(avg_lvl)
-}
-```
-
-
-```{r}
-# Compute and print the desired average:
-avg_lvl <- compute_avg_lvl("Bromine PM2.5 LC", "Wisconsin")
+# Compute the desired average:
+amean <- part_matter["Arithmetic Mean"]
+fltr_pname <- part_matter["Parameter Name"] == "Bromine PM2.5 LC"
+fltr_state <- part_matter["State Name"] == "Wisconsin"
+avg_lvl <- mean(amean[fltr_pname & fltr_state], na.rm = TRUE)
 printf("Average = %.6f\n", avg_lvl)
 ```
 
@@ -85,15 +67,11 @@ by_pname <- group_by_at(part_matter, vars("Parameter Name"))
 # Compute the average level for each group:
 avg_lvl <- summarise_at(by_pname, vars("Arithmetic Mean"), mean, na.rm = TRUE)
 
-# Highest average level:
 pname <- pull(avg_lvl, 1)
-amean <- pull(avg_lvl, 2)
-fltr <- grepl("PM2.5", pname)
-high_avg_lvl <- max(amean[fltr])
+avlvl <- pull(avg_lvl, 2)
 
-# Corresponding constituent:
-fltr <- amean == high_avg_lvl
-const <- pname[fltr]
+# Constituent with the highest average level:
+const <- pname[avlvl == max(avlvl[grepl("PM2.5", pname)])]
 printf("Constituent with the highest average level = %s\n", const)
 ```
 
@@ -106,24 +84,17 @@ across all time?
 
 ```{r}
 # Use the columns "State Code", "County Code" and "Site Num" to group the data:
-by_msite <- group_by_at(
-    part_matter, vars("State Code", "County Code", "Site Num")
-)
+by_msite <- group_by_at(part_matter, vars("State Code", "County Code", "Site Num"))
 
 # Extract the data corresponding to "Sulfate PM2.5 LC":
-by_msite_sulf <- filter_at(
-    by_msite, vars("Parameter Name"), ~ .x == "Sulfate PM2.5 LC"
-)
+by_msite_sulf <- filter_at(by_msite, vars("Parameter Name"), ~ .x == "Sulfate PM2.5 LC")
 
 # Compute the average level for each group:
-avg_lvl <- summarise_at(
-    by_msite_sulf, vars("Arithmetic Mean"), mean, na.rm = TRUE
-)
+avg_lvl <- summarise_at(by_msite_sulf, vars("Arithmetic Mean"), mean, na.rm = TRUE)
 
+# Monitoring site with the highest average level:
+tmp <- filter_at(avg_lvl, vars("Arithmetic Mean"), ~ .x == max(avg_lvl["Arithmetic Mean"]))
 printf("Monitoring site with the highest average level:\n")
-tmp <- filter_at(
-    avg_lvl, vars("Arithmetic Mean"), ~ .x == max(avg_lvl["Arithmetic Mean"])
-)
 printf("State Code  - %s\n", pull(tmp, 1))
 printf("County Code - %s\n", pull(tmp, 2))
 printf("Site Num    - %s\n", pull(tmp, 3))
@@ -138,11 +109,15 @@ sites?
 
 
 ```{r}
+fltr_pname <- part_matter["Parameter Name"] == "EC PM2.5 LC TOR"
+
 # Compute the average level for Arizona:
-avg_lvl_az <- compute_avg_lvl("EC PM2.5 LC TOR", "Arizona")
+fltr_state <- part_matter["State Name"] == "Arizona"
+avg_lvl_az <- mean(amean[fltr_pname & fltr_state], na.rm = TRUE)
 
 # Compute the average level for California:
-avg_lvl_ca <- compute_avg_lvl("EC PM2.5 LC TOR", "California")
+fltr_state <- part_matter["State Name"] == "California"
+avg_lvl_ca <- mean(amean[fltr_pname & fltr_state], na.rm = TRUE)
 
 # Compute the absolute difference:
 abs_diff <- abs(avg_lvl_az - avg_lvl_ca)
@@ -153,13 +128,12 @@ printf("Absolute difference = %.6f\n", abs_diff)
 ## Question 5
 
 What is the median level of "OC PM2.5 LC TOR" in the western United States,
-across all time? Define western as any monitoring location that has a Longitude
-LESS THAN -100.
+across all time? Define western as any monitoring location that has a longitude
+less than -100.
 
 
 ```{r}
 # Compute the median level:
-amean <- part_matter["Arithmetic Mean"]
 fltr_long <- part_matter["Longitude"] < -100
 fltr_pname <- part_matter["Parameter Name"] == "OC PM2.5 LC TOR"
 median_lvl <- median(amean[fltr_long & fltr_pname], na.rm = TRUE)
@@ -172,26 +146,18 @@ printf("Median level = %.4f\n", median_lvl)
 
 ```{r}
 # Load the dataset:
-sites <- suppressWarnings(read_excel("aqs_sites.xlsx"))
-```
+col_types <- c(rep("text", times = 3), rep("guess", times = 25))
+sites <- read_excel("aqs_sites.xlsx", col_types = col_types)
 
-
-```{r}
 # Print the first 20 rows:
 head(sites, 20L)
 ```
 
 
-```{r}
-# Print the column names:
-colnames(sites)
-```
-
-
 ## Question 6
 
-How many monitoring sites are labelled as both RESIDENTIAL for "Land Use" and
-SUBURBAN for "Location Setting"?
+How many monitoring sites are labelled as both "RESIDENTIAL" for "Land Use" and
+"SUBURBAN" for "Location Setting"?
 
 
 ```{r}
@@ -211,5 +177,145 @@ is defined as longitude greater than or equal to -100?
 
 
 ```{r}
-# x:
+# Get the relevant data from the 1st dataset:
+fltrd_1 <- filter_at(part_matter, vars("Parameter Name"), ~ .x == "EC PM2.5 LC TOR")
+fltrd_1 <- fltrd_1[c("State Code", "County Code", "Site Num", "Arithmetic Mean")]
+fltrd_1 <- mutate_at(fltrd_1, vars("State Code", "County Code", "Site Num"), as.numeric)
+
+# Get the relevant data from the 2nd dataset:
+fltrd_2 <- filter(
+    sites,
+    .data[["Land Use"]] == "RESIDENTIAL",
+    .data[["Location Setting"]] == "SUBURBAN",
+    .data[["Longitude"]] >= -100
+)
+fltrd_2 <- fltrd_2[c("State Code", "County Code", "Site Number")]
+colnames(fltrd_2)[3] <- "Site Num"
+fltrd_2 <- mutate_at(fltrd_2, vars("State Code", "County Code", "Site Num"), as.numeric)
+
+# Compute the median level:
+jds <- inner_join(fltrd_1, fltrd_2, by = c("State Code", "County Code", "Site Num"))
+median_lvl <- median(jds[["Arithmetic Mean"]], na.rm = TRUE)
+printf("Median level = %.4f\n", median_lvl)
+```
+
+
+## Question 8
+
+Amongst monitoring sites that are labeled as "COMMERCIAL" for "Land Use", which
+month of the year has the highest average levels of "Sulfate PM2.5 LC"?
+
+
+```{r}
+# Get the relevant data from the 1st dataset:
+fltrd_1 <- filter_at(part_matter, vars("Parameter Name"), ~ .x == "Sulfate PM2.5 LC")
+fltrd_1 <- fltrd_1[c("State Code", "County Code", "Site Num", "Arithmetic Mean", "Date Local")]
+fltrd_1 <- mutate_at(fltrd_1, vars("State Code", "County Code", "Site Num"), as.numeric)
+fltrd_1 <- mutate_at(fltrd_1, vars("Date Local"), ~ format(.x, "%m"))
+colnames(fltrd_1)[5] <- "Month"
+
+# Get the relevant data from the 2nd dataset:
+fltrd_2 <- filter_at(sites, vars("Land Use"), ~ .x == "COMMERCIAL")
+fltrd_2 <- fltrd_2[c("State Code", "County Code", "Site Number")]
+colnames(fltrd_2)[3] <- "Site Num"
+fltrd_2 <- suppressWarnings(mutate_at(fltrd_2, vars("State Code", "County Code", "Site Num"), as.numeric))
+
+# Month with the highest average level:
+jds <- inner_join(fltrd_1, fltrd_2, by = c("State Code", "County Code", "Site Num"))
+avg_lvl <- summarise_at(group_by_at(jds, vars("Month")), vars("Arithmetic Mean"), mean, na.rm = TRUE)
+mon <- pull(filter_at(avg_lvl, vars("Arithmetic Mean"), ~ .x == max(avg_lvl["Arithmetic Mean"])), 1)
+printf("Month with the highest average level = %s\n", mon)
+```
+
+
+## Question 9
+
+Take a look at the data for the monitoring site identified by State Code 6,
+County Code 65, and Site Number 8001 (this monitor is in California). At this
+monitor, for how many days is the sum of "Sulfate PM2.5 LC" and "Total Nitrate
+PM2.5 LC" greater than 10?
+
+For each of the chemical constituents, there will be some dates that have
+multiple "Arithmetic Mean" values at this monitoring site. When there are
+multiple values on a given date, take the average of the constituent values for
+that date.
+
+
+```{r}
+# Get the relevant data from the 1st dataset:
+fltrd_1 <- filter(
+    part_matter,
+    as.numeric(.data[["State Code"]]) == 6,
+    as.numeric(.data[["County Code"]]) == 65,
+    as.numeric(.data[["Site Num"]]) == 8001,
+    .data[["Parameter Name"]] == "Sulfate PM2.5 LC" | .data[["Parameter Name"]] == "Total Nitrate PM2.5 LC"
+)
+fltrd_1 <- fltrd_1[c("Date Local", "Parameter Name", "Arithmetic Mean")]
+
+# Sulfate:
+sulf <- filter_at(fltrd_1, vars("Parameter Name"), ~ .x == "Sulfate PM2.5 LC")
+sulf <- sulf[c("Date Local", "Arithmetic Mean")]
+colnames(sulf)[2] <- "Sulfate"
+sulf <- summarise_at(group_by_at(sulf, vars("Date Local")), vars("Sulfate"), mean, na.rm = TRUE)
+
+# Total Nitrate:
+tot_nit <- filter_at(fltrd_1, vars("Parameter Name"), ~ .x == "Total Nitrate PM2.5 LC")
+tot_nit <- tot_nit[c("Date Local", "Arithmetic Mean")]
+colnames(tot_nit)[2] <- "Total Nitrate"
+tot_nit <- summarise_at(group_by_at(tot_nit, vars("Date Local")), vars("Total Nitrate"), mean, na.rm = TRUE)
+
+# Compute the number of days:
+jds <- inner_join(sulf, tot_nit, by = "Date Local")
+days <- nrow(filter(jds, .data[["Sulfate"]] + .data[["Total Nitrate"]] > 10))
+printf("Number of days = %d\n", days)
+```
+
+
+## Question 10
+
+Which monitoring site in the dataset has the highest correlation between
+"Sulfate PM2.5 LC" and "Total Nitrate PM2.5 LC" across all dates? Identify the
+monitoring site by its State, County, and Site Number code.
+
+
+```{r}
+# Get the relevant data from the 1st dataset:
+fltrd_1 <- filter_at(
+    part_matter, vars("Parameter Name"),
+    ~ .x == "Sulfate PM2.5 LC" | .x == "Total Nitrate PM2.5 LC"
+)
+fltrd_1 <- fltrd_1[c("State Code", "County Code", "Site Num", "Date Local", "Parameter Name", "Arithmetic Mean")]
+
+# Sulfate:
+sulf <- filter_at(fltrd_1, vars("Parameter Name"), ~ .x == "Sulfate PM2.5 LC")
+sulf <- sulf[c("State Code", "County Code", "Site Num", "Date Local", "Arithmetic Mean")]
+colnames(sulf)[5] <- "Sulfate"
+sulf <- summarise_at(
+    group_by_at(
+        sulf, vars("State Code", "County Code", "Site Num", "Date Local")
+    ),
+    vars("Sulfate"), mean, na.rm = TRUE
+)
+
+# Total Nitrate:
+tot_nit <- filter_at(fltrd_1, vars("Parameter Name"), ~ .x == "Total Nitrate PM2.5 LC")
+tot_nit <- tot_nit[c("State Code", "County Code", "Site Num", "Date Local", "Arithmetic Mean")]
+colnames(tot_nit)[5] <- "Total Nitrate"
+tot_nit <- summarise_at(
+    group_by_at(
+        tot_nit, vars("State Code", "County Code", "Site Num", "Date Local")
+    ),
+    vars("Total Nitrate"), mean, na.rm = TRUE
+)
+
+# Monitoring site with the highest correlation:
+jds <- inner_join(sulf, tot_nit, by = c("State Code", "County Code", "Site Num", "Date Local"))
+corrs <- summarise(
+    jds, Correlations = cor(.data[["Sulfate"]], .data[["Total Nitrate"]]), .groups = "drop"
+)
+tmp <- filter_at(corrs, vars("Correlations"), ~ .x == max(corrs["Correlations"]))
+printf("Monitoring site with the highest correlation:\n")
+printf("State Code  - %s\n", pull(tmp, 1))
+printf("County Code - %s\n", pull(tmp, 2))
+printf("Site Num    - %s\n", pull(tmp, 3))
 ```
